@@ -14,7 +14,7 @@ st.set_page_config(
 # Configurar la API de Google (lee la clave de secrets.toml)
 try:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash') # Usar el modelo Flash (rápido y capaz)
+    model = genai.GenerativeModel('models/gemini-pro-latest')
 except Exception as e:
     st.error(f"Error al configurar la API de Gemini: {e}")
     st.error("Asegúrate de haber creado el archivo .streamlit/secrets.toml con tu GOOGLE_API_KEY")
