@@ -252,30 +252,47 @@ def actualizar_niveles_y_contexto(escuela_json):
 )
 def mostrar_contexto_especifico_crear(nivel_seleccionado):
     opciones_plan_crear = []
-    inputs_especificos = []
     
+    # Definir estilos para mostrar/ocultar los inputs
+    style_primario = {'display': 'none'}
+    style_secundario = {'display': 'none'}
+    style_otro = {'display': 'none'}
+
     if nivel_seleccionado == 'Primario':
         opciones_plan_crear = [
             {'label': 'Plan Anual (Parrilla)', 'value': 'Anual-Primaria'},
             {'label': 'Plan Mensual (Actividades y Rúbricas)', 'value': 'Mensual-Primaria'},
         ]
-        inputs_especificos = [
-            dbc.Label("Eventos Especiales / Días Patrios (Opcional):"),
-            dbc.Textarea(id="ia-dias-patios", placeholder="Ej: 25 de Mayo, Día de la Bandera...", rows=2),
-        ]
+        style_primario = {'display': 'block'}
     elif nivel_seleccionado == 'Secundario':
         opciones_plan_crear = [
             {'label': 'Plan Anual (desde Libro Matriz)', 'value': 'Anual-Secundaria'},
             {'label': 'Plan Mensual (desde Anual)', 'value': 'Mensual-Secundaria'},
         ]
-        inputs_especificos = [
-            dbc.Label("Libro Matriz / Temario General (Opcional):"),
-            dbc.Textarea(id="ia-libro-matriz", placeholder="Ej: 'Capítulos 1-4 del libro Santillana...'", rows=2),
-        ]
+        style_secundario = {'display': 'block'}
     else:
         # Default o Nivel Inicial
         opciones_plan_crear = [{'label': 'Planificación de Actividades', 'value': 'Actividades'}]
-        inputs_especificos = [dbc.Label("Contexto General:"), dbc.Textarea(id="ia-contexto-general", rows=2)]
+        style_otro = {'display': 'block'}
+
+    # Crear siempre todos los componentes, pero controlar su visibilidad.
+    # Así, el callback principal siempre los encontrará en el layout.
+    inputs_especificos = [
+        html.Div([
+            dbc.Label("Eventos Especiales / Días Patrios (Opcional):"),
+            dbc.Textarea(id="ia-dias-patios", placeholder="Ej: 25 de Mayo, Día de la Bandera...", rows=2),
+        ], style=style_primario),
+        
+        html.Div([
+            dbc.Label("Libro Matriz / Temario General (Opcional):"),
+            dbc.Textarea(id="ia-libro-matriz", placeholder="Ej: 'Capítulos 1-4 del libro Santillana...'", rows=2),
+        ], style=style_secundario),
+
+        html.Div([
+            dbc.Label("Contexto General:"), 
+            dbc.Textarea(id="ia-contexto-general", rows=2)
+        ], style=style_otro)
+    ]
 
     return inputs_especificos, opciones_plan_crear
 
@@ -322,6 +339,7 @@ def mostrar_formulario_principal(accion_seleccionada):
     State('ia-plan-base-crear', 'value'),
     State('ia-dias-patios', 'value'),     # (del input dinámico)
     State('ia-libro-matriz', 'value'),    # (del input dinámico)
+    State('ia-contexto-general', 'value'),# (del input dinámico)
     
     # Estados de "Analizar Documento"
     State('ia-accion-analizar', 'value'),
@@ -337,7 +355,7 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
                                    # Argumentos de "Crear"
                                    tipo_plan_crear, materia, ano_grado, cant_alumnos, 
                                    dias_clase, cant_eval, cant_tps, inclusion_crear, 
-                                   plan_base_crear, dias_patios, libro_matriz,
+                                   plan_base_crear, dias_patios, libro_matriz, contexto_general,
                                    # Argumentos de "Analizar"
                                    accion_analizar, plan_base_analizar,
                                    # Argumentos de "Adaptar"
@@ -366,6 +384,8 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
             contexto_nivel_str = f"Eventos especiales a considerar (días patrios): {dias_patios}"
         elif nivel == 'Secundario' and libro_matriz:
             contexto_nivel_str = f"Temario / Libro Matriz de referencia: {libro_matriz}"
+        elif contexto_general:
+            contexto_nivel_str = f"Contexto general provisto: {contexto_general}"
 
         prompt_final = f"""
         **Rol:** Eres Guidia, un Asesor Pedagógico experto en Nivel {nivel} en una escuela {contexto} de Mendoza.
