@@ -465,50 +465,40 @@ def download_pdf(n_clicks, markdown_text):
     if not markdown_text:
         return dash.no_update
 
-    filename = "Planificacion.pdf"
-    pdf = FPDF()
-    pdf.add_page()
-    # Añadir soporte para UTF-8 (importante para tildes y caracteres especiales)
-    pdf.add_font('Arial', '', 'Arial.ttf', uni=True)
-    pdf.set_font("Arial", size=12)
-
+    # --- Intento 1: Usar write_html para texto con formato ---
     try:
-        # Intento 1: Usar write_html que soporta Markdown/HTML básico
-        # Reemplazamos saltos de línea de Markdown por <br> para HTML
-        html_text = markdown_text.replace('\n', '<br>')
-        pdf.write_html(html_text)
-        filename = "Guidia_Planificacion.pdf"
-    except Exception as e1:
-        print(f"Error con write_html, usando fallback a texto plano. Error: {e1}")
-        # Intento 2: Si falla, usar multi_cell que es más robusto para texto simple
         pdf = FPDF()
         pdf.add_page()
-        pdf.add_font('Arial', '', 'Arial.ttf', uni=True)
+        # Añadir soporte para UTF-8, buscando la fuente en la carpeta assets
+        pdf.add_font('Arial', '', 'assets/arial.ttf', uni=True)
         pdf.set_font("Arial", size=12)
-        # Usar .encode().decode() para limpiar caracteres problemáticos
-        cleaned_text = markdown_text.encode('latin-1', 'replace').decode('latin-1')
-        pdf.multi_cell(0, 10, cleaned_text)
-        filename = "Guidia_Planificacion_Texto.pdf"
 
-    try:
-        # Generar el PDF en memoria como bytes y enviarlo para descarga
-        # Tu error estaba aquí: pdf.output() retorna bytes, no se "llama".
-        # Lo cambiamos a la forma más explícita y segura:
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        return dcc.send_bytes(pdf_bytes, filename)
-    except Exception as e2:
-        print(f"Error final al generar PDF: {e2}")
-        # El error 'bytearray' object is not callable
-        # suele significar que pdf.output() ya fue llamado o el objeto está corrupto.
-        # Probemos un re-intento final simple
+        # Reemplazar saltos de línea de Markdown por <br> para que write_html los interprete
+        html_text = markdown_text.replace('\n', '<br>')
+        pdf.write_html(html_text)
+        
+        # Generar el PDF en memoria como bytes y enviarlo
+        pdf_bytes = pdf.output()
+        return dcc.send_bytes(pdf_bytes, "Guidia_Planificacion.pdf")
+
+    except Exception as e1:
+        print(f"Error con write_html, usando fallback a texto plano. Error: {e1}")
+        
+        # --- Intento 2: Fallback a texto plano si write_html falla ---
         try:
-            pdf_final = FPDF()
-            pdf_final.add_page()
-            pdf_final.add_font('Arial', '', 'Arial.ttf', uni=True)
-            pdf_final.set_font("Arial", size=12)
-            cleaned_text = markdown_text.encode('latin-1', 'replace').decode('latin-1')
-            pdf_final.multi_cell(0, 10, cleaned_text)
-            pdf_bytes_final = pdf_final.output(dest='S').encode('latin-1')
-            return dcc.send_bytes(pdf_bytes_final, "Guidia_Planificacion_Fallback.pdf")
-        except:
-            return dash.no_update # Falló la generación
+            pdf = FPDF()
+            pdf.add_page()
+            # Usar también aquí la fuente UTF-8 desde la carpeta assets
+            pdf.add_font('Arial', '', 'assets/arial.ttf', uni=True)
+            pdf.set_font("Arial", size=12)
+            
+            # multi_cell maneja bien el texto plano, no necesita reemplazos
+            pdf.multi_cell(0, 10, markdown_text)
+            
+            # Generar el PDF en memoria como bytes y enviarlo
+            pdf_bytes = pdf.output()
+            return dcc.send_bytes(pdf_bytes, "Guidia_Planificacion_TextoPlano.pdf")
+            
+        except Exception as e2:
+            print(f"Error crítico al generar PDF de fallback: {e2}")
+            return dash.no_update # Falló la generación por completo
