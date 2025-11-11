@@ -330,35 +330,31 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
 )
 def download_pdf(n_clicks, markdown_text):
     if not markdown_text:
-        # No hacer nada si no hay texto que descargar
         return dash.no_update
 
+    filename = "Planificacion.pdf"
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
     try:
+        # Intento 1: Usar write_html que soporta Markdown/HTML básico
+        pdf.write_html(markdown_text)
+        filename = "PlanificacionGenerada.pdf"
+    except Exception as e1:
+        print(f"Error con write_html, usando fallback a texto plano. Error: {e1}")
+        # Intento 2: Si falla, usar multi_cell que es más robusto para texto simple
+        # Se crea un nuevo objeto PDF para asegurar que no esté en un estado corrupto
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
-        
-        # ¡La magia! fpdf2 puede interpretar Markdown básico.
-        # Necesita que el texto sea codificado a latin-1 para manejar caracteres especiales
-        pdf.write_html(markdown_text)
-        
-        # Generar el PDF en memoria como bytes
-        pdf_output = pdf.output()
-        
-        # Enviar los bytes al navegador
-        return dcc.send_bytes(pdf_output, "PlanificacionGenerada.pdf")
+        pdf.multi_cell(0, 10, markdown_text)
+        filename = "PlanificacionFallback.pdf"
 
-    except Exception as e:
-        # En caso de que el markdown sea muy complejo para fpdf2
-        # Creamos un PDF de texto plano como fallback
-        try:
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", size=12)
-            # multi_cell maneja saltos de línea automáticamente
-            pdf.multi_cell(0, 10, markdown_text)
-            pdf_output = pdf.output()
-            return dcc.send_bytes(pdf_output, "PlanificacionFallback.pdf")
-        except Exception as e2:
-            print(f"Error generando PDF: {e2}")
-            return dash.no_update # Falló la generación
+    try:
+        # Generar el PDF en memoria como bytes y enviarlo para descarga
+        pdf_bytes = pdf.output()
+        return dcc.send_bytes(pdf_bytes, filename)
+    except Exception as e2:
+        print(f"Error final al generar PDF: {e2}")
+        return dash.no_update # Falló la generación
