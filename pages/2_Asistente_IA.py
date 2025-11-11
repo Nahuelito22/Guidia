@@ -4,6 +4,7 @@ import dash_bootstrap_components as dbc
 import google.generativeai as genai
 import os
 import json
+from fpdf import FPDF # NUEVO: Importar la biblioteca de PDF
 
 # Registrar esta página
 dash.register_page(__name__, name='Asistente IA')
@@ -23,13 +24,15 @@ layout = dbc.Container([
     # Este Div mostrará un saludo o una advertencia
     html.Div(id="ia-welcome-message"),
     
+    # NUEVO: Componente invisible para manejar la descarga
+    dcc.Download(id="download-pdf"),
+    
     dbc.Row([
         # --- Columna Izquierda (Contexto y Acción) ---
         dbc.Col([
             dbc.Card([
                 dbc.CardHeader("Paso 1: ¿Qué quieres hacer hoy?"),
                 dbc.CardBody([
-                    # --- NUEVO: EL SELECTOR DE ACCIÓN PRINCIPAL ---
                     dcc.RadioItems(
                         id='selector-accion-principal',
                         options=[
@@ -37,14 +40,13 @@ layout = dbc.Container([
                             {'label': ' Analizar un Plan existente / Generar Rúbricas', 'value': 'analizar'},
                             {'label': ' Adaptar una Actividad Diaria (Inclusión Rápida)', 'value': 'adaptar'},
                         ],
-                        value='crear', # Valor por defecto
+                        value='crear',
                         labelStyle={'display': 'block', 'margin-bottom': '10px'}
                     )
                 ])
             ]),
             html.Br(),
             
-            # --- Contenedor de Contexto (Se muestra siempre) ---
             dbc.Card([
                 dbc.CardHeader("Paso 2: Define tu Contexto"),
                 dbc.CardBody([
@@ -55,7 +57,7 @@ layout = dbc.Container([
                     dcc.Dropdown(id="ia-select-nivel", placeholder="Selecciona una escuela primero..."),
                     
                     dbc.Label("Contexto de la Escuela:", className="mt-2"),
-                    dbc.Input(id="ia-contexto-escuela", disabled=True) # Se rellena solo
+                    dbc.Input(id="ia-contexto-escuela", disabled=True)
                 ])
             ]),
 
@@ -66,24 +68,20 @@ layout = dbc.Container([
             
             # --- Formulario para "CREAR PLANIFICACIÓN" ---
             dbc.Card(id="card-crear-plan", children=[
+                # ... (Contenido del formulario 'crear', sin cambios) ...
                 dbc.CardHeader("Paso 3: Detalles para CREAR Planificación"),
                 dbc.CardBody([
                     dbc.Label("Tipo de Plan a Crear:"),
                     dcc.RadioItems(id="ia-select-tipo-plan-crear", value='Anual'),
-                    
                     html.Hr(),
                     dbc.Label("Detalles Específicos (según Nivel):"),
-                    html.Div(id="ia-contexto-nivel-crear"), # Se rellena dinámicamente
-                    
+                    html.Div(id="ia-contexto-nivel-crear"),
                     dbc.Label("Cantidad de Evaluaciones (TPs, Pruebas):", className="mt-2"),
                     dbc.Input(id="ia-cant-eval-crear", type="number", value=2, min=0, step=1),
-                    
                     dbc.Label("Cantidad de Días de Clase (aprox):", className="mt-2"),
                     dbc.Input(id="ia-dias-clase-crear", type="number", value=20, min=1, step=1),
-
                     dbc.Label("Input Base (Pega los temas, parrilla anterior, libro matriz, etc.):"),
                     dbc.Textarea(id="ia-plan-base-crear", rows=10),
-                    
                     dbc.Label("Desafíos de Inclusión (para adaptar rúbricas):", className="mt-2"),
                     dbc.Checklist(id="ia-inclusion-crear", options=[
                         {'label': 'TDAH', 'value': 'TDAH'}, {'label': 'Dislexia', 'value': 'Dislexia'}
@@ -93,6 +91,7 @@ layout = dbc.Container([
 
             # --- Formulario para "ANALIZAR DOCUMENTO" ---
             dbc.Card(id="card-analizar-doc", children=[
+                # ... (Contenido del formulario 'analizar', sin cambios) ...
                 dbc.CardHeader("Paso 3: Detalles para ANALIZAR Planificación"),
                 dbc.CardBody([
                     dbc.Label("¿Qué quieres que haga la IA con este documento?"),
@@ -103,10 +102,9 @@ layout = dbc.Container([
                             {'label': 'Resumir para Suplente (detectar temas clave)', 'value': 'resumen'},
                             {'label': 'Sugerir Adaptaciones de Inclusión', 'value': 'adaptar-doc'},
                         ],
-                        value=['rubricas'] # Valor por defecto
+                        value=['rubricas']
                     ),
                     html.Hr(),
-                    # --- AQUÍ ESTÁ EL COMPROMISO (TEXTAREA, NO PDF) ---
                     dbc.Label("Pega aquí la Planificación (Anual, Mensual, etc.) a ANALIZAR:"),
                     dbc.Textarea(id="ia-plan-base-analizar", rows=20,
                                  placeholder="Pega aquí el documento completo (PDF, Word, etc.)..."),
@@ -115,11 +113,11 @@ layout = dbc.Container([
 
             # --- Formulario para "ADAPTACIÓN RÁPIDA" ---
             dbc.Card(id="card-adaptar-diaria", children=[
+                # ... (Contenido del formulario 'adaptar', sin cambios) ...
                 dbc.CardHeader("Paso 3: Adaptación Rápida de Clase Diaria"),
                 dbc.CardBody([
                     dbc.Label("Pega aquí tu borrador de actividad de clase:"),
                     dbc.Textarea(id="ia-plan-base-adaptar", rows=10),
-                    
                     dbc.Label("Desafíos de Inclusión a adaptar:", className="mt-2"),
                     dbc.Checklist(id="ia-inclusion-adaptar", options=[
                         {'label': 'TDAH', 'value': 'TDAH'}, {'label': 'Dislexia', 'value': 'Dislexia'}
@@ -127,18 +125,28 @@ layout = dbc.Container([
                 ])
             ], style={'display': 'none'}), # Oculto por defecto
             
-            # --- Botón de Generar (Unificado) ---
-            dbc.Button("Generar Respuesta IA", 
-                     id="ia-generar-btn-unificado", 
-                     color="primary", 
-                     className="mt-3 w-100", 
-                     n_clicks=0),
+            # --- Botones de Acción ---
+            # NUEVO: Botones uno al lado del otro
+            dbc.Row([
+                dbc.Col(dbc.Button("Generar Respuesta IA", 
+                                 id="ia-generar-btn-unificado", 
+                                 color="primary", 
+                                 className="w-100", 
+                                 n_clicks=0), width=8),
+                
+                dbc.Col(dbc.Button("Descargar PDF",
+                                 id="btn-download-pdf", # NUEVO: ID del botón de descarga
+                                 color="secondary",
+                                 className="w-100",
+                                 n_clicks=0), width=4),
+            ], className="mt-3"),
             
             # --- Output (Unificado) ---
             html.Hr(),
             dbc.Label("Resultados Generados por la IA:"),
             dcc.Loading(
-                dcc.Markdown(id="ia-output-div-unificado", style={'border': '1px solid #ddd', 'padding': '10px', 'min-height': '200px'})
+                dcc.Markdown(id="ia-output-div-unificado", 
+                             style={'border': '1px solid #ddd', 'padding': '10px', 'min-height': '200px', 'background-color': '#fff'})
             )
             
         ], width=8) # Fin Columna Derecha
@@ -147,7 +155,13 @@ layout = dbc.Container([
 
 # --- 2. Callbacks (La "Magia" de Dash) ---
 
-# --- Callback 1: Cargar Perfil y poblar Dropdowns iniciales ---
+# --- Callbacks 1 a 4 (Sin cambios) ---
+# (Aquí van los 4 callbacks que ya teníamos: 
+# 1. cargar_perfil_y_escuelas
+# 2. actualizar_niveles_y_contexto
+# 3. mostrar_contexto_especifico_crear
+# 4. mostrar_formulario_principal
+# Pégalos aquí sin modificarlos...)
 @callback(
     Output('ia-welcome-message', 'children'),
     Output('ia-select-escuela', 'options'),
@@ -163,34 +177,28 @@ def cargar_perfil_y_escuelas(data_json):
         instituciones = perfil.get('instituciones', [])
         if not instituciones:
             return dbc.Alert("Tu perfil no tiene instituciones. Por favor, añade al menos una.", color="warning"), []
-        opciones_escuela = [{'label': esc['nombre'], 'value': json.dumps(esc)} for esc in instituciones] # Guardar el objeto entero
+        opciones_escuela = [{'label': esc['nombre'], 'value': json.dumps(esc)} for esc in instituciones]
         mensaje_bienvenida = dbc.Alert(f"¡Hola {nombre_docente}! Selecciona tu contexto para comenzar.", color="success")
         return mensaje_bienvenida, opciones_escuela
     except Exception as e:
         return dbc.Alert(f"Error al cargar tu perfil: {e}", color="danger"), []
 
-# --- Callback 2: Actualizar Nivel y Contexto (cuando se elige escuela) ---
 @callback(
     Output('ia-select-nivel', 'options'),
     Output('ia-select-nivel', 'value'),
     Output('ia-contexto-escuela', 'value'),
-    Input('ia-select-escuela', 'value') # Se dispara cuando cambia la escuela
+    Input('ia-select-escuela', 'value')
 )
 def actualizar_niveles_y_contexto(escuela_json):
     if not escuela_json:
         return [], None, ""
-    
-    escuela = json.loads(escuela_json) # Convertir el string JSON de vuelta a objeto
+    escuela = json.loads(escuela_json)
     niveles_de_la_escuela = escuela.get('niveles', [])
     contexto_de_la_escuela = escuela.get('contexto', 'Urbana')
-    
     opciones_nivel = [{'label': nivel, 'value': nivel} for nivel in niveles_de_la_escuela]
     valor_nivel = opciones_nivel[0]['value'] if opciones_nivel else None
-    
     return opciones_nivel, valor_nivel, contexto_de_la_escuela
 
-# --- Callback 3: Actualizar Opciones (Primaria vs Secundaria) ---
-# Se dispara cuando cambia el Nivel
 @callback(
     Output('ia-contexto-nivel-crear', 'children'),
     Output('ia-select-tipo-plan-crear', 'options'),
@@ -199,7 +207,6 @@ def actualizar_niveles_y_contexto(escuela_json):
 def mostrar_contexto_especifico_crear(nivel_seleccionado):
     opciones_plan_crear = []
     inputs_especificos = []
-    
     if nivel_seleccionado == 'Primario':
         opciones_plan_crear = [
             {'label': 'Plan Anual (Parrilla)', 'value': 'Anual-Primaria'},
@@ -218,50 +225,43 @@ def mostrar_contexto_especifico_crear(nivel_seleccionado):
             dbc.Label("Libro Matriz / Temario General (Opcional):"),
             dbc.Textarea(id="ia-libro-matriz", placeholder="Ej: 'Capítulos 1-4 del libro Santillana...'", rows=2),
         ]
-    
     return inputs_especificos, opciones_plan_crear
 
-# --- Callback 4: Mostrar/Ocultar los Formularios Principales ---
 @callback(
     Output('card-crear-plan', 'style'),
     Output('card-analizar-doc', 'style'),
     Output('card-adaptar-diaria', 'style'),
-    Input('selector-accion-principal', 'value') # Se dispara con el RadioItems principal
+    Input('selector-accion-principal', 'value')
 )
 def mostrar_formulario_principal(accion_seleccionada):
     style_crear = {'display': 'none'}
     style_analizar = {'display': 'none'}
     style_adaptar = {'display': 'none'}
-    
     if accion_seleccionada == 'crear':
         style_crear = {'display': 'block'}
     elif accion_seleccionada == 'analizar':
         style_analizar = {'display': 'block'}
     elif accion_seleccionada == 'adaptar':
         style_adaptar = {'display': 'block'}
-        
     return style_crear, style_analizar, style_adaptar
 
-# --- Callback 5: Generar la respuesta de la IA (El Cerebro Unificado) ---
+# --- Callback 5: Generar la respuesta de la IA (Sin cambios) ---
+# (Pega aquí el callback 5 que genera la respuesta de la IA...)
 @callback(
     Output('ia-output-div-unificado', 'children'),
     Input('ia-generar-btn-unificado', 'n_clicks'),
     State('session-storage', 'data'),
     State('selector-accion-principal', 'value'),
-    # Estados del Contexto
     State('ia-select-escuela', 'value'),
     State('ia-select-nivel', 'value'),
     State('ia-contexto-escuela', 'value'),
-    # Estados de "Crear"
     State('ia-select-tipo-plan-crear', 'value'),
     State('ia-dias-clase-crear', 'value'),
     State('ia-cant-eval-crear', 'value'),
     State('ia-inclusion-crear', 'value'),
     State('ia-plan-base-crear', 'value'),
-    # Estados de "Analizar"
     State('ia-accion-analizar', 'value'),
     State('ia-plan-base-analizar', 'value'),
-    # Estados de "Adaptar"
     State('ia-inclusion-adaptar', 'value'),
     State('ia-plan-base-adaptar', 'value'),
     prevent_initial_call=True
@@ -275,17 +275,13 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
     if not API_CONFIGURADA: return "Error: API de IA no configurada."
     if not data_json: return "Error: Perfil no cargado."
     
-    # Cargar datos del perfil
+    # ... (El resto del código del prompt maestro v5.0 va aquí) ...
     data = json.loads(data_json)
     perfil = data.get('perfil', data)
     nombre_docente = perfil.get('nombre_docente', 'Docente')
     escuela = json.loads(esc_json) if esc_json else {}
     escuela_nombre = escuela.get('nombre', 'N/A')
-
-    # Inicializar el prompt
     prompt_final = ""
-
-    # --- Generar el Prompt según la ACCIÓN seleccionada ---
     
     if accion == 'crear':
         inclusion_str = ", ".join(inclusion_crear) if inclusion_crear else "ninguno"
@@ -293,42 +289,76 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
         **Rol:** Eres un Asesor Pedagógico experto en Nivel {nivel} en una escuela {contexto} de Mendoza.
         **Cliente:** {nombre_docente} (Escuela: {escuela_nombre}).
         **Tarea:** CREAR una "{tipo_plan_crear}".
-        **Contexto:**
-        * Días de clase: {dias_clase}
-        * Evaluaciones: {cant_eval}
-        * Desafíos de Inclusión (para plan y rúbricas): {inclusion_str}
-        **Input Base (Temas/Libro):**
-        {plan_base_crear}
+        **Contexto:** Días de clase: {dias_clase}, Evaluaciones: {cant_eval}, Desafíos de Inclusión: {inclusion_str}
+        **Input Base (Temas/Libro):** {plan_base_crear}
         **Output Requerido:** Genera el plan detallado, actividades, y las RÚBRICAS de evaluación adaptadas.
         """
-
     elif accion == 'analizar':
         accion_str = ", ".join(accion_analizar)
         prompt_final = f"""
         **Rol:** Eres un Asesor Pedagógico experto (para {nombre_docente} de {escuela_nombre}).
         **Tarea:** ANALIZAR el siguiente documento.
         **Acciones Requeridas:** {accion_str} (Ej. Generar Rúbricas, Resumir para suplente).
-        **Input Base (Documento Pegado):**
-        {plan_base_analizar}
-        **Output Requerido:** Entrega un informe claro que cumpla con las acciones pedidas. Si se piden rúbricas, genéralas. Si se pide resumen, que sea claro y conciso.
+        **Input Base (Documento Pegado):** {plan_base_analizar}
+        **Output Requerido:** Entrega un informe claro que cumpla con las acciones pedidas.
         """
-
     elif accion == 'adaptar':
         inclusion_str = ", ".join(inclusion_adaptar) if inclusion_adaptar else "ninguno"
         prompt_final = f"""
         **Rol:** Eres un Asesor Pedagógico experto en adaptaciones rápidas.
         **Tarea:** ADAPTAR una actividad diaria.
         **Desafíos de Inclusión:** {inclusion_str}
-        **Input Base (Actividad Diaria):**
-        {plan_base_adaptar}
+        **Input Base (Actividad Diaria):** {plan_base_adaptar}
         **Output Requerido:** Genera 2-3 sugerencias de adaptación concretas y el párrafo para el informe de GEI.
         """
     else:
         return "Error: Acción no reconocida."
 
-    # --- Llamar a la IA ---
     try:
         response = model.generate_content(prompt_final)
         return response.text
     except Exception as e:
         return f"Error al contactar la IA: {e}"
+
+
+# --- NUEVO: Callback 6 para Descargar el PDF ---
+@callback(
+    Output('download-pdf', 'data'), # El output es el componente de descarga
+    Input('btn-download-pdf', 'n_clicks'),
+    State('ia-output-div-unificado', 'children'), # El input es el texto de Markdown
+    prevent_initial_call=True
+)
+def download_pdf(n_clicks, markdown_text):
+    if not markdown_text:
+        # No hacer nada si no hay texto que descargar
+        return dash.no_update
+
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        # ¡La magia! fpdf2 puede interpretar Markdown básico.
+        # Necesita que el texto sea codificado a latin-1 para manejar caracteres especiales
+        pdf.write_html(markdown_text)
+        
+        # Generar el PDF en memoria como bytes
+        pdf_output = pdf.output()
+        
+        # Enviar los bytes al navegador
+        return dcc.send_bytes(pdf_output, "PlanificacionGenerada.pdf")
+
+    except Exception as e:
+        # En caso de que el markdown sea muy complejo para fpdf2
+        # Creamos un PDF de texto plano como fallback
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+            # multi_cell maneja saltos de línea automáticamente
+            pdf.multi_cell(0, 10, markdown_text)
+            pdf_output = pdf.output()
+            return dcc.send_bytes(pdf_output, "PlanificacionFallback.pdf")
+        except Exception as e2:
+            print(f"Error generando PDF: {e2}")
+            return dash.no_update # Falló la generación

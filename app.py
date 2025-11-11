@@ -22,10 +22,11 @@ app.layout = dbc.Container(
         dbc.NavbarSimple(
             children=[
                 # Crear un link para cada página registrada en la carpeta /pages
+                # Excluimos las páginas legales que irán en el footer
                 dbc.NavItem(dbc.NavLink(page['name'], href=page['relative_path']))
-                for page in dash.page_registry.values()
+                for page in dash.page_registry.values() if page['path'] not in ['/terminos-y-condiciones', '/politica-de-privacidad']
             ],
-            brand="Asistente Inclusivo 🚀",
+            brand=html.Img(src='/assets/Guidia_Logotipo_mas_Texto.png', height='50px'),
             brand_href="/",
             color="primary",
             dark=True,
@@ -45,10 +46,12 @@ app.layout = dbc.Container(
         html.Footer(
             html.Div(
                 [
-                    html.A("Términos y Condiciones", href="#"), 
-                    " | ",
-                    html.A("Política de Privacidad", href="#")
-                ], 
+                    html.Span("© 2025 Guidia. Todos los derechos reservados."),
+                    html.Span(" | ", className="mx-3"),
+                    html.A("Términos y Condiciones", href="/terminos-y-condiciones"),
+                    html.Span(" | ", className="mx-1"),
+                    html.A("Política de Privacidad", href="/politica-de-privacidad")
+                ],
                 className="footer"
             )
         )
