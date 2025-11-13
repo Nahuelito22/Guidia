@@ -454,7 +454,7 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
         return f"Error al contactar la IA: {e}"
 
 
-# --- Callback 6: Descargar el PDF (TU VERSIÓN ROBUSTA) ---
+# --- Callback 6: Descargar el PDF (Corregido) ---
 @callback(
     Output('download-pdf', 'data'), # El output es el componente de descarga
     Input('btn-download-pdf', 'n_clicks'),
@@ -462,7 +462,7 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
     prevent_initial_call=True
 )
 def download_pdf(n_clicks, markdown_text):
-    if not markdown_text:
+    if not markdown_text or n_clicks == 0:
         return dash.no_update
 
     # --- Intento 1: Usar write_html para texto con formato ---
@@ -477,9 +477,14 @@ def download_pdf(n_clicks, markdown_text):
         html_text = markdown_text.replace('\n', '<br>')
         pdf.write_html(html_text)
         
-        # Generar el PDF en memoria como bytes y enviarlo
-        pdf_bytes = pdf.output()
-        return dcc.send_bytes(pdf_bytes, "Guidia_Planificacion.pdf")
+        pdf_output = pdf.output()
+        if isinstance(pdf_output, str):
+            pdf_bytes = pdf_output.encode('latin-1')
+        else:
+            pdf_bytes = pdf_output
+            
+        # SOLUCIÓN: Convertir explícitamente a bytes() para dcc.send_bytes
+        return dcc.send_bytes(bytes(pdf_bytes), "Guidia_Planificacion.pdf")
 
     except Exception as e1:
         print(f"Error con write_html, usando fallback a texto plano. Error: {e1}")
@@ -488,17 +493,22 @@ def download_pdf(n_clicks, markdown_text):
         try:
             pdf = FPDF()
             pdf.add_page()
-            # Usar también aquí la fuente UTF-8 desde la carpeta assets
             pdf.add_font('Arial', '', 'assets/arial.ttf', uni=True)
             pdf.set_font("Arial", size=12)
             
-            # multi_cell maneja bien el texto plano, no necesita reemplazos
             pdf.multi_cell(0, 10, markdown_text)
             
-            # Generar el PDF en memoria como bytes y enviarlo
-            pdf_bytes = pdf.output()
-            return dcc.send_bytes(pdf_bytes, "Guidia_Planificacion_TextoPlano.pdf")
+            pdf_output = pdf.output()
+            if isinstance(pdf_output, str):
+                pdf_bytes = pdf_output.encode('latin-1')
+            else:
+                pdf_bytes = pdf_output
+
+            # SOLUCIÓN: Convertir explícitamente a bytes() para dcc.send_bytes
+            return dcc.send_bytes(bytes(pdf_bytes), "Guidia_Planificacion_TextoPlano.pdf")
             
         except Exception as e2:
             print(f"Error crítico al generar PDF de fallback: {e2}")
-            return dash.no_update # Falló la generación por completo
+            import traceback
+            traceback.print_exc()
+            return dash.no_update
