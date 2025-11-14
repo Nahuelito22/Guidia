@@ -15,6 +15,9 @@ app = Dash(__name__,
            external_stylesheets=[dbc.themes.BOOTSTRAP],
            suppress_callback_exceptions=True)
 
+# Exponer el servidor Flask para el despliegue (ej. Gunicorn)
+server = app.server
+
 # --- El "Caparazón" de la App ---
 app.layout = dbc.Container(
     [
