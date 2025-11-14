@@ -85,6 +85,12 @@ layout = dbc.Container([
                                 dbc.Label("Año/Grado:", className="mt-2"),
                                 dbc.Input(id="ia-ano-grado", placeholder="Ej: 5to Grado, 3er Año"),
                                 
+                                # Campo de Mes, oculto por defecto
+                                html.Div([
+                                    dbc.Label("Mes a Planificar:", className="mt-2"),
+                                    dbc.Input(id="ia-mes-plan", placeholder="Ej: Mayo, Junio"),
+                                ], id="ia-mes-container", style={'display': 'none'}),
+
                                 dbc.Label("Cantidad de Alumnos (aprox):", className="mt-2"),
                                 dbc.Input(id="ia-cant-alumnos", type="number", value=30, min=1, step=1),
                             ]),
@@ -323,6 +329,19 @@ def mostrar_formulario_principal(accion_seleccionada):
         
     return style_crear, style_analizar, style_adaptar
 
+
+# --- Callback para mostrar/ocultar el campo de mes ---
+@callback(
+    Output('ia-mes-container', 'style'),
+    Input('ia-select-tipo-plan-crear', 'value')
+)
+def toggle_mes_container(plan_type):
+    if plan_type in ['Mensual-Primaria', 'Mensual-Secundaria']:
+        return {'display': 'block'}
+    return {'display': 'none'}
+
+
+
 # --- Callback 5: Generar la respuesta de la IA (ACTUALIZADO CON TUS IDEAS) ---
 @callback(
     Output('ia-output-div-unificado', 'children'),
@@ -336,17 +355,18 @@ def mostrar_formulario_principal(accion_seleccionada):
     
     # Estados de "Crear Planificación" (SECCIÓN ACTUALIZADA)
     State('ia-select-tipo-plan-crear', 'value'),
-    State('ia-materia', 'value'),         # NUEVO
-    State('ia-ano-grado', 'value'),       # NUEVO
-    State('ia-cant-alumnos', 'value'),    # NUEVO
+    State('ia-materia', 'value'),
+    State('ia-ano-grado', 'value'),
+    State('ia-mes-plan', 'value'), # NUEVO
+    State('ia-cant-alumnos', 'value'),
     State('ia-dias-clase-crear', 'value'),
     State('ia-cant-eval-crear', 'value'),
-    State('ia-cant-tps-crear', 'value'),  # NUEVO
+    State('ia-cant-tps-crear', 'value'),
     State('ia-inclusion-crear', 'value'),
     State('ia-plan-base-crear', 'value'),
-    State('ia-dias-patios', 'value'),     # (del input dinámico)
-    State('ia-libro-matriz', 'value'),    # (del input dinámico)
-    State('ia-contexto-general', 'value'),# (del input dinámico)
+    State('ia-dias-patios', 'value'),
+    State('ia-libro-matriz', 'value'),
+    State('ia-contexto-general', 'value'),
     
     # Estados de "Analizar Documento"
     State('ia-accion-analizar', 'value'),
@@ -360,7 +380,7 @@ def mostrar_formulario_principal(accion_seleccionada):
 def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
                                    esc_json, nivel, contexto,
                                    # Argumentos de "Crear"
-                                   tipo_plan_crear, materia, ano_grado, cant_alumnos, 
+                                   tipo_plan_crear, materia, ano_grado, mes_plan, cant_alumnos, 
                                    dias_clase, cant_eval, cant_tps, inclusion_crear, 
                                    plan_base_crear, dias_patios, libro_matriz, contexto_general,
                                    # Argumentos de "Analizar"
@@ -385,6 +405,9 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
         if not all([materia, ano_grado, tipo_plan_crear]):
              return "Error: Faltan datos clave. Por favor, completa 'Materia', 'Año/Grado' y 'Tipo de Plan' en el acordeón."
         
+        # Añadir el mes al tipo de plan si está definido
+        plan_str = f"{tipo_plan_crear} para el mes de {mes_plan}" if mes_plan and 'Mensual' in tipo_plan_crear else tipo_plan_crear
+
         inclusion_str = ", ".join(inclusion_crear) if inclusion_crear else "ninguno"
         contexto_nivel_str = ""
         if nivel == 'Primario' and dias_patios:
@@ -397,7 +420,7 @@ def generar_respuesta_ia_unificada(n_clicks, data_json, accion,
         prompt_final = f"""
         **Rol:** Eres Guidia, un Asesor Pedagógico experto en Nivel {nivel} en una escuela {contexto} de Mendoza.
         **Cliente:** {nombre_docente} (Escuela: {escuela_nombre}).
-        **Tarea:** CREAR una "{tipo_plan_crear}" para la materia {materia}, en el año/grado {ano_grado}.
+        **Tarea:** CREAR una "{plan_str}" para la materia {materia}, en el año/grado {ano_grado}.
         
         **Contexto del Aula y Plan:**
         * Días de clase: {dias_clase}
