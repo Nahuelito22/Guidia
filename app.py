@@ -9,9 +9,9 @@ load_dotenv()
 
 # Inicializar la app
 app = Dash(__name__, 
-        use_pages=True, 
-        external_stylesheets=[dbc.themes.BOOTSTRAP],
-        suppress_callback_exceptions=True)
+           use_pages=True, 
+           external_stylesheets=[dbc.themes.BOOTSTRAP],
+           suppress_callback_exceptions=True)
 
 # Exponer el servidor Flask
 server = app.server
@@ -66,7 +66,7 @@ app.layout = dbc.Container(
 )
 
 
-# --- 5. LÓGICA DE PROTECCIÓN DE PÁGINAS (¡NUEVA!) ---
+# --- 5. LÓGICA DE PROTECCIÓN DE PÁGINAS ---
 # Este callback protege las páginas que no son de autenticación
 
 @callback(
@@ -95,6 +95,5 @@ def auth_guard(pathname, session_data):
     # Si no, no hacemos nada
     return dash.no_update
 
-
-if __name__ == '_main_':
+if __name__ == '__main__':
     app.run(debug=True)
